@@ -208,9 +208,9 @@ generate_machine_config() {
     
     # Set hardware imports based on graphics type
     if [[ "$GRAPHICS_TYPE" == "intel" ]]; then
-        hardware_imports="    ./intel-graphics.nix"
+        hardware_imports="    ../intel-graphics.nix"
     elif [[ "$GRAPHICS_TYPE" == "nvidia" ]]; then
-        hardware_imports="    ./nvidia.nix"
+        hardware_imports="    ../nvidia.nix"
     fi
     
     cat > "$machine_file" << EOF
@@ -218,7 +218,7 @@ generate_machine_config() {
   hostName = "$HOSTNAME";
   userName = "$USERNAME";
   userDescription = "Katnix User";
-  backgroundImagePath = ./kat.png;
+  backgroundImagePath = ../kat.png;
   
   # Hardware imports based on graphics type
   hardwareImports = [
@@ -239,32 +239,14 @@ update_flake_config() {
     print_info "Updating flake configuration..."
     
     local hostname_key=$(echo $HOSTNAME | sed 's/-//g')
-    local machine_import="./machines/$(echo $HOSTNAME | tr '[:upper:]' '[:lower:]').nix"
     
-    # Check if the hostname already exists in flake.nix
-    if grep -q "$hostname_key" "$CONFIG_DIR/flake.nix"; then
-        print_info "Configuration for $hostname_key already exists in flake.nix"
+    # The flake.nix already has Katnix-Desktop and Katnix-Laptop configurations
+    # We don't need to modify it since these are the standard configurations
+    if [[ "$hostname_key" == "KatnixDesktop" ]] || [[ "$hostname_key" == "KatnixLaptop" ]]; then
+        print_success "Using standard configuration: $HOSTNAME"
     else
-        # Add the new configuration to flake.nix after the existing configurations
-        # Find the line with "nixosConfigurations = {" and add after existing entries
-        local temp_file=$(mktemp)
-        awk -v hostname="$hostname_key" -v machine_import="$machine_import" '
-        /nixosConfigurations = \{/ { 
-            print $0
-            found = 1
-            next
-        }
-        found && /\};$/ && !/^[[:space:]]*[^[:space:]].*=.*mkSystem/ {
-            print "      " hostname " = mkSystem (import " machine_import ");"
-            print $0
-            found = 0
-            next
-        }
-        { print }
-        ' "$CONFIG_DIR/flake.nix" > "$temp_file"
-        
-        mv "$temp_file" "$CONFIG_DIR/flake.nix"
-        print_success "Added $hostname_key configuration to flake.nix"
+        print_warning "Custom hostname detected. You may need to manually add your configuration to flake.nix"
+        print_info "Or rename your machine to match Katnix-Desktop or Katnix-Laptop"
     fi
 }
 
@@ -314,11 +296,11 @@ install_system() {
     
     # First try to build the configuration to catch any errors
     print_info "Building configuration..."
-    nix build ".#nixosConfigurations.$hostname_key.config.system.build.toplevel"
+    nix build ".#nixosConfigurations.$hostname_key.config.system.build.toplevel" --impure
     
     # If build succeeds, switch to it
     print_info "Switching to new configuration..."
-    sudo nixos-rebuild switch --flake ".#$hostname_key"
+    sudo nixos-rebuild switch --flake ".#$hostname_key" --impure
     
     print_success "System configuration installed successfully!"
 }
@@ -360,7 +342,7 @@ main() {
     print_info "Configuration is available at: $CONFIG_DIR"
     echo ""
     print_info "Future updates can be done with:"
-    echo "  cd ~/nixos && nixos-rebuild switch --flake .#$(echo $HOSTNAME | sed 's/-//g')"
+    echo "  cd ~/nixos && nixos-rebuild switch --flake .#$(echo $HOSTNAME | sed 's/-//g') --impure"
     echo ""
     print_warning "You may need to reboot to ensure all changes take effect."
 }
