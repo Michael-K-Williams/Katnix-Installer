@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 
-# Katnix Installer - Interactive NixOS Configuration Installer
-# This script helps set up a new Katnix system with customizable options
-
+# Katnix Installer - Simple NixOS Configuration Installer
 set -euo pipefail
 
-# Colors for output
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Configuration variables
+# Configuration
 KATNIX_CONFIG_REPO="https://github.com/Michael-K-Williams/KatnixConfig.git"
 CONFIG_DIR="$HOME/nixos"
 HOSTNAME=""
@@ -20,7 +18,6 @@ MACHINE_TYPE=""
 GRAPHICS_TYPE=""
 USERNAME=$(whoami)
 
-# Helper functions
 print_header() {
     echo -e "${BLUE}================================${NC}"
     echo -e "${BLUE}    Katnix NixOS Installer      ${NC}"
@@ -28,47 +25,21 @@ print_header() {
     echo ""
 }
 
-print_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-print_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
-
-print_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-print_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
-}
-
-# Check if running as root
-check_root() {
-    if [[ $EUID -eq 0 ]]; then
-        print_error "This script should not be run as root!"
-        print_info "Run it as your regular user. It will prompt for sudo when needed."
-        exit 1
-    fi
-}
+print_success() { echo -e "${GREEN}✅ $1${NC}"; }
+print_error() { echo -e "${RED}❌ $1${NC}"; }
+print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
+print_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
 
 # Check prerequisites
 check_prerequisites() {
     print_info "Checking prerequisites..."
     
-    if ! command -v git &> /dev/null; then
-        print_error "Git is not installed. Please install git first:"
-        echo "  nix-shell -p git"
+    if [[ $EUID -eq 0 ]]; then
+        print_error "Don't run as root! Run as regular user."
         exit 1
     fi
     
-    if ! command -v nix &> /dev/null; then
-        print_error "Nix is not installed. This script requires NixOS."
-        exit 1
-    fi
-    
-    if [[ ! -f /etc/nixos/hardware-configuration.nix ]]; then
+    if [[ ! -f /etc/NIXOS ]] || [[ ! -f /etc/nixos/hardware-configuration.nix ]]; then
         print_error "This doesn't appear to be a NixOS system or hardware-configuration.nix is missing!"
         exit 1
     fi
@@ -76,145 +47,95 @@ check_prerequisites() {
     print_success "Prerequisites check passed"
 }
 
-# Get hostname from user
-get_hostname() {
-    echo ""
-    echo -e "${BLUE}Hostname Configuration${NC}"
-    echo "Please enter a hostname for this machine (will be prefixed with 'Katnix-'):"
-    echo "Examples: Desktop, Laptop, Server, etc."
-    echo ""
+# Get configuration from user
+get_user_config() {
+    echo "Hostname Configuration"
+    echo "Enter the hostname for this machine:"
+    read -p "Hostname: " HOSTNAME
     
-    while true; do
-        read -p "Enter hostname suffix: " hostname_suffix
-        
-        if [[ -z "$hostname_suffix" ]]; then
-            print_error "Hostname cannot be empty!"
-            continue
-        fi
-        
-        if [[ ! "$hostname_suffix" =~ ^[a-zA-Z0-9-]+$ ]]; then
-            print_error "Hostname can only contain letters, numbers, and hyphens!"
-            continue
-        fi
-        
-        HOSTNAME="Katnix-$hostname_suffix"
-        echo ""
-        print_info "Hostname will be: $HOSTNAME"
-        read -p "Is this correct? (y/n): " confirm
-        
-        if [[ "$confirm" =~ ^[Yy]$ ]]; then
-            break
-        fi
-    done
+    if [[ -z "$HOSTNAME" ]]; then
+        print_error "Hostname cannot be empty"
+        exit 1
+    fi
     
+    echo ""
+    echo "ℹ️  Hostname will be: $HOSTNAME"
+    read -p "Is this correct? (y/n): " confirm
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        print_error "Installation cancelled"
+        exit 1
+    fi
     print_success "Hostname configured: $HOSTNAME"
-}
-
-# Get machine type from user
-get_machine_type() {
-    echo ""
-    echo -e "${BLUE}Machine Type Configuration${NC}"
-    echo "Select your machine type:"
-    echo "1) Desktop - Includes EDHM and EDMC (Elite Dangerous tools)"
-    echo "2) Laptop  - Excludes EDHM and EDMC for better battery life"
-    echo ""
     
-    while true; do
-        read -p "Enter choice (1 or 2): " choice
-        
-        case $choice in
-            1)
-                MACHINE_TYPE="desktop"
-                print_success "Machine type: Desktop (with Elite Dangerous tools)"
-                break
-                ;;
-            2)
-                MACHINE_TYPE="laptop"
-                print_success "Machine type: Laptop (minimal configuration)"
-                break
-                ;;
-            *)
-                print_error "Invalid choice! Please enter 1 or 2."
-                ;;
-        esac
-    done
-}
-
-# Get graphics type from user
-get_graphics_type() {
     echo ""
-    echo -e "${BLUE}Graphics Configuration${NC}"
+    echo "Machine Type Configuration"
+    echo "Select your machine type:"
+    echo "1) Desktop - Gaming setup with Steam, Elite Dangerous tools"
+    echo "2) Laptop  - Power-efficient setup, no gaming tools"
+    echo ""
+    read -p "Enter choice (1 or 2): " choice
+    
+    case $choice in
+        1) MACHINE_TYPE="desktop" ;;
+        2) MACHINE_TYPE="laptop" ;;
+        *) print_error "Invalid choice"; exit 1 ;;
+    esac
+    print_success "Machine type: $MACHINE_TYPE"
+    
+    echo ""
+    echo "Graphics Configuration"
     echo "Select your graphics hardware:"
     echo "1) Intel Graphics"
     echo "2) NVIDIA Graphics"
     echo ""
+    read -p "Enter choice (1 or 2): " choice
     
-    while true; do
-        read -p "Enter choice (1 or 2): " choice
-        
-        case $choice in
-            1)
-                GRAPHICS_TYPE="intel"
-                print_success "Graphics: Intel"
-                break
-                ;;
-            2)
-                GRAPHICS_TYPE="nvidia"
-                print_success "Graphics: NVIDIA"
-                break
-                ;;
-            *)
-                print_error "Invalid choice! Please enter 1 or 2."
-                ;;
-        esac
-    done
+    case $choice in
+        1) GRAPHICS_TYPE="intel" ;;
+        2) GRAPHICS_TYPE="nvidia" ;;
+        *) print_error "Invalid choice"; exit 1 ;;
+    esac
+    print_success "Graphics: $GRAPHICS_TYPE"
 }
 
-# Clone or update configuration
-setup_config() {
+# Clone and setup configuration
+setup_configuration() {
     print_info "Setting up configuration in $CONFIG_DIR..."
     
     if [[ -d "$CONFIG_DIR" ]]; then
-        print_warning "Directory $CONFIG_DIR already exists!"
-        read -p "Do you want to remove it and start fresh? (y/n): " confirm
-        
-        if [[ "$confirm" =~ ^[Yy]$ ]]; then
-            rm -rf "$CONFIG_DIR"
-            print_info "Removed existing configuration directory"
-        else
-            print_error "Installation cancelled"
-            exit 1
-        fi
+        print_warning "Configuration directory exists. Backing up..."
+        mv "$CONFIG_DIR" "${CONFIG_DIR}.backup.$(date +%s)"
     fi
     
     print_info "Cloning Katnix configuration..."
     git clone "$KATNIX_CONFIG_REPO" "$CONFIG_DIR"
-    cd "$CONFIG_DIR"
     
-    # Copy hardware configuration from system
-    print_info "Copying hardware configuration..."
-    sudo cp /etc/nixos/hardware-configuration.nix "$CONFIG_DIR/"
-    sudo chown "$USERNAME:users" "$CONFIG_DIR/hardware-configuration.nix"
+    cd "$CONFIG_DIR"
     
     print_success "Configuration cloned successfully"
 }
 
-# Generate machine configuration
-generate_machine_config() {
-    print_info "Generating machine-specific configuration..."
+# Create machine-specific configuration
+create_machine_config() {
+    print_info "Creating machine-specific configuration..."
     
-    local machine_file="$CONFIG_DIR/machines/$(echo $HOSTNAME | tr '[:upper:]' '[:lower:]').nix"
-    local hardware_imports=""
-    
-    # Set hardware imports based on graphics type
+    # Set hardware imports
+    local hardware_import=""
     if [[ "$GRAPHICS_TYPE" == "intel" ]]; then
-        hardware_imports="    ../intel-graphics.nix"
+        hardware_import="../intel-graphics.nix"
     elif [[ "$GRAPHICS_TYPE" == "nvidia" ]]; then
-        hardware_imports="    ../nvidia.nix"
+        hardware_import="../nvidia.nix"  
     fi
     
-    cat > "$machine_file" << EOF
+    # Create the machine config
+    cat > "$CONFIG_DIR/machines/machine.nix" << EOF
 {
+  # This file is auto-generated by the Katnix installer
+  # Machine: $HOSTNAME
+  # Type: $MACHINE_TYPE
+  # Graphics: $GRAPHICS_TYPE
+  # Generated: $(date)
+  
   hostName = "$HOSTNAME";
   userName = "$USERNAME";
   userDescription = "Katnix User";
@@ -222,85 +143,113 @@ generate_machine_config() {
   
   # Hardware imports based on graphics type
   hardwareImports = [
-$hardware_imports
+    $hardware_import
   ];
   
-  # Machine type configuration
+  # Machine type configuration (read from persistent config)
   machineType = "$MACHINE_TYPE";
   includeEliteDangerous = $(if [[ "$MACHINE_TYPE" == "desktop" ]]; then echo "true"; else echo "false"; fi);
 }
 EOF
 
-    print_success "Generated machine configuration: $machine_file"
+    print_success "Created machine configuration"
 }
 
-# Update flake configuration
-update_flake_config() {
+# Update flake.nix to use the single machine config
+update_flake() {
     print_info "Updating flake configuration..."
     
-    local hostname_key=$(echo $HOSTNAME | sed 's/-//g')
-    
-    # The flake.nix already has Katnix-Desktop and Katnix-Laptop configurations
-    # We don't need to modify it since these are the standard configurations
-    if [[ "$hostname_key" == "KatnixDesktop" ]] || [[ "$hostname_key" == "KatnixLaptop" ]]; then
-        print_success "Using standard configuration: $HOSTNAME"
-    else
-        print_warning "Custom hostname detected. You may need to manually add your configuration to flake.nix"
-        print_info "Or rename your machine to match Katnix-Desktop or Katnix-Laptop"
-    fi
-}
-
-# Update configuration to conditionally include Elite Dangerous apps
-update_elite_config() {
-    print_info "Updating Elite Dangerous application configuration..."
-    
-    # Create a conditional configuration for Elite Dangerous apps
-    local elite_config="$CONFIG_DIR/modules/elite-dangerous.nix"
-    
-    cat > "$elite_config" << 'EOF'
-{ config, pkgs, machineConfig, ... }:
+    # Replace the nixosConfigurations section to use our single machine config
+    cat > temp_flake.nix << 'EOF'
 {
-  # Elite Dangerous applications - conditionally enabled
-  programs = {
-    edhm.enable = machineConfig.includeEliteDangerous or false;
-    edmc.enable = machineConfig.includeEliteDangerous or false;
+  description = "NixOS configuration with home-manager";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    home-manager = {
+      url = "github:nix-community/home-manager/release-25.05";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    plasma-manager = {
+      url = "github:nix-community/plasma-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
+    nix-flatpak = {
+      url = "github:gmodena/nix-flatpak";
+    };
+    edhm = {
+      url = "github:Brighter-Applications/EDHM-Nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    edmc = {
+      url = "github:Brighter-Applications/EDMC-Nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    vscode-mutable = {
+      url = "github:Michael-K-Williams/VSCode-mutable/main";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    zsh-p10k-config = {
+      url = "github:Michael-K-Williams/My-ZshP10k-Nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    claude-code = {
+      url = "github:Michael-K-Williams/Claude-Code-Nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    katnix-commands = {
+      url = "github:Michael-K-Williams/Katnix-Commands";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  outputs = { self, nixpkgs, home-manager, plasma-manager, nix-flatpak, edhm, edmc, vscode-mutable, zsh-p10k-config, claude-code, katnix-commands, ... }@inputs: 
+  let
+    machineConfig = import ./machines/machine.nix;
+    mkSystem = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      specialArgs = { inherit inputs machineConfig; };
+      modules = [
+        ./configuration.nix
+        home-manager.nixosModules.home-manager
+        edhm.nixosModules.default
+        edmc.nixosModules.default
+        vscode-mutable.nixosModules.default
+        {
+          home-manager.useGlobalPkgs = true;
+          home-manager.useUserPackages = true;
+          home-manager.backupFileExtension = "backup";
+          home-manager.extraSpecialArgs = { inherit inputs machineConfig; };
+          home-manager.users.${machineConfig.userName} = import ./home.nix;
+        }
+      ];
+    };
+  in {
+    nixosConfigurations = {
+      default = mkSystem;
+    };
   };
 }
 EOF
-
-    # Update configuration.nix to include the new module
-    if ! grep -q "./modules/elite-dangerous.nix" "$CONFIG_DIR/configuration.nix"; then
-        sed -i '/\.\/modules\/users\.nix/a\    ./modules/elite-dangerous.nix' "$CONFIG_DIR/configuration.nix"
-        
-        # Remove the hardcoded Elite Dangerous programs from configuration.nix
-        sed -i '/programs\.edhm\.enable = true;/d' "$CONFIG_DIR/configuration.nix"
-        sed -i '/programs\.edmc\.enable = true;/d' "$CONFIG_DIR/configuration.nix"
-        
-        print_success "Elite Dangerous applications configured conditionally"
-    fi
+    
+    mv temp_flake.nix flake.nix
+    print_success "Updated flake configuration"
 }
 
-# Install system configuration
+# Install the system
 install_system() {
     print_info "Installing system configuration..."
-    
-    cd "$CONFIG_DIR"
+    print_warning "This will require sudo access"
     
     print_info "Updating flake lock..."
     nix flake update
     
-    print_info "Building and switching to new configuration..."
-    print_warning "This will require sudo access to install the system configuration"
-    
-    local hostname_key=$(echo $HOSTNAME | sed 's/-//g')
-    
-    # First try to build the configuration to catch any errors
     print_info "Building configuration..."
-    nix build ".#nixosConfigurations.$hostname_key.config.system.build.toplevel" --impure
+    nix build ".#nixosConfigurations.default.config.system.build.toplevel" --impure
     
-    # If build succeeds, switch to it
     print_info "Switching to new configuration..."
-    sudo nixos-rebuild switch --flake ".#$hostname_key" --impure
+    sudo nixos-rebuild switch --flake ".#default" --impure
     
     print_success "System configuration installed successfully!"
 }
@@ -308,44 +257,39 @@ install_system() {
 # Main installation process
 main() {
     print_header
-    
-    check_root
     check_prerequisites
-    get_hostname
-    get_machine_type  
-    get_graphics_type
-    
     echo ""
-    echo -e "${BLUE}Configuration Summary:${NC}"
+    get_user_config
+    echo ""
+    
+    echo "Configuration Summary:"
     echo "  Hostname: $HOSTNAME"
     echo "  Machine Type: $MACHINE_TYPE"
     echo "  Graphics: $GRAPHICS_TYPE"
-    echo "  Elite Dangerous Apps: $(if [[ "$MACHINE_TYPE" == "desktop" ]]; then echo "Enabled"; else echo "Disabled"; fi)"
     echo "  Configuration Directory: $CONFIG_DIR"
     echo ""
-    
     read -p "Proceed with installation? (y/n): " confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
         print_error "Installation cancelled"
         exit 1
     fi
     
-    setup_config
-    generate_machine_config
-    update_flake_config
-    update_elite_config
+    setup_configuration
+    create_machine_config
+    update_flake
     install_system
     
     echo ""
     print_success "Katnix installation completed!"
-    print_info "Your system is now configured with your custom settings."
+    print_info "Your system hostname is: $HOSTNAME"
+    print_info "Machine type: $MACHINE_TYPE with $GRAPHICS_TYPE graphics"
     print_info "Configuration is available at: $CONFIG_DIR"
     echo ""
     print_info "Future updates can be done with:"
-    echo "  cd ~/nixos && nixos-rebuild switch --flake .#$(echo $HOSTNAME | sed 's/-//g') --impure"
+    echo "  katnix update"
+    echo "  # or manually: cd ~/nixos && sudo nixos-rebuild switch --flake .#default --impure"
     echo ""
     print_warning "You may need to reboot to ensure all changes take effect."
 }
 
-# Run main function
 main "$@"
