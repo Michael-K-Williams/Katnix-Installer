@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration variables
-KATNIX_CONFIG_REPO="https://github.com/Michael-K-Williams/Katnix-NixOS.git"
+KATNIX_CONFIG_REPO="https://github.com/Michael-K-Williams/KatnixConfig.git"
 CONFIG_DIR="$HOME/nixos"
 HOSTNAME=""
 MACHINE_TYPE=""
