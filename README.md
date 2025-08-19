@@ -27,7 +27,11 @@ This installer simplifies the process of setting up a complete Katnix NixOS syst
 2. **Download and run the installer**:
    ```bash
    curl -O https://raw.githubusercontent.com/Michael-K-Williams/Katnix-Installer/main/install.sh
+   ```
+   ```bash
    chmod +x install.sh
+   ```
+   ```bash
    ./install.sh
    ```
 
